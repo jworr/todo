@@ -1,0 +1,132 @@
+#!/usr/bin/python
+
+import re
+import sys
+import signal
+import os
+from os.path import exists, join
+
+PREFIX = "~/Dropbox"
+
+#setup the storage location
+if exists(PREFIX):
+	DATA = join(PREFIX,"todo.txt")
+	LOCK = join(PREFIX, ".todo.lck")
+else:
+	DATA = "~/.todo.txt"
+	LOCK = "~/.todo.lck"
+
+def signalHandler(signal, frame):
+	"""
+	Saves the file when ctrl c is pressed
+	"""
+	clear()
+	saveFile(frame.f_locals["items"])
+	removeLock()
+	sys.exit(0)
+
+def loadFile():
+	"""
+	Returns a list of items to do
+	"""
+	data = open(DATA, "r")
+	results = [l.strip() for l in data.readlines()]
+	data.close()
+	return [i for i in results if len(i)]
+
+def clear():
+	"""
+	clears the terminal
+	"""
+	sys.stdout.write('\033[2J')
+	sys.stdout.write('\033[H')
+	sys.stdout.flush()
+
+def showList(items):
+	"""
+	Prints out the current todo list
+	"""
+	clear()
+
+	#print out each item
+	for i,item in enumerate(items):
+		print("{}. {}".format(i, item))
+
+def saveFile(items):
+	"""
+	Writes out the current todo list
+	"""
+	out = open(DATA, "w")
+	out.write( "\n".join(items) )
+	out.close()
+
+def removeLock():
+	"""
+	Removes the lock file
+	"""
+	os.remove(LOCK)
+
+def createLock():
+	"""
+	Creates the lock file
+	"""
+	handler = open(LOCK, "w")
+	handler.close()
+
+#commands
+EXIT = r"exit"
+ADD = r"add (.+)"
+DEL = r"del|rm ([0-9 ]+)"
+NUM = r"([0-9]+)"
+SAVE = r"save"
+
+#check for lock file
+if exists(LOCK):
+	print("Todo already running")
+	sys.exit(1)
+
+#create the lock
+createLock()
+
+#init the program
+done = False
+items = loadFile()
+showList(items)
+
+#register handler for crtl+c
+signal.signal(signal.SIGINT, signalHandler)
+
+#contine reading commands
+while not done:
+
+	#get the input
+	cmd = raw_input()
+
+	#match it to a command
+	if re.match(EXIT, cmd):
+		saveFile(items)
+		removeLock()
+		sys.exit(0)
+
+	elif re.match(ADD, cmd):
+		items.append(re.match(ADD, cmd).groups()[0].strip())
+		showList(items)
+
+	elif re.match(SAVE, cmd):
+		saveFile(items)
+		showList(items)
+
+	elif re.match(DEL, cmd):
+		
+		#get all the items to remove and do it in reverse order to make sure
+		#the correct indexes are removed
+		for index in sorted(map(int,re.findall(NUM, cmd)), reverse=True):
+			del items[index]
+		
+		showList(items)
+
+	#print error message
+	else:
+		showList(items)
+		print("Please enter a command {}, {} {}, or {}".format(ADD, DEL, SAVE, EXIT))
+
