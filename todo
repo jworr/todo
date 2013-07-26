@@ -4,17 +4,18 @@ import re
 import sys
 import signal
 import os
-from os.path import exists, join
+from os.path import exists, join, expanduser
 
-PREFIX = "~/Dropbox"
+HOME = expanduser("~")
+DROPBOX = join(HOME,"Dropbox")
 
 #setup the storage location
-if exists(PREFIX):
-	DATA = join(PREFIX,"todo.txt")
-	LOCK = join(PREFIX, ".todo.lck")
+if exists(DROPBOX):
+	DATA = join(DROPBOX,"todo.txt")
+	LOCK = join(DROPBOX, ".todo.lck")
 else:
-	DATA = "~/.todo.txt"
-	LOCK = "~/.todo.lck"
+	DATA = join(HOME,".todo.txt")
+	LOCK = join(HOME,".todo.lck")
 
 def signalHandler(signal, frame):
 	"""
