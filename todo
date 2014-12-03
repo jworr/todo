@@ -5,35 +5,26 @@ import sys
 import signal
 import os
 from os.path import exists, join, expanduser
+from argparse import ArgumentParser
 
 HOME = expanduser("~")
 DROPBOX = join(HOME,"Dropbox")
+DATA_DIR = DROPBOX if exists(DROPBOX) else HOME
 
-#setup the storage location
-if exists(DROPBOX):
-	DATA = join(DROPBOX,"todo.txt")
-	LOCK = join(DROPBOX, ".todo.lck")
-else:
-	DATA = join(HOME,".todo.txt")
-	LOCK = join(HOME,".todo.lck")
-
-def signalHandler(signal, frame):
-	"""
-	Saves the file when ctrl c is pressed
-	"""
-	clear()
-	saveFile(frame.f_locals["items"])
-	removeLock()
-	sys.exit(0)
-
-def loadFile():
+def loadFile(dataFile):
 	"""
 	Returns a list of items to do
 	"""
-	data = open(DATA, "r")
-	results = [l.strip() for l in data.readlines()]
-	data.close()
-	return [i for i in results if len(i)]
+	results = []
+	
+	#load the files if it exits
+	if exists(dataFile):
+		data = open(dataFile, "r")
+		results = [l.strip() for l in data.readlines()]
+		data.close()
+		results = [i for i in results if len(i)]
+
+	return results
 
 def clear():
 	"""
@@ -53,81 +44,121 @@ def showList(items):
 	for i,item in enumerate(items):
 		print("{}. {}".format(i, item))
 
-def saveFile(items):
+def saveFile(dataFile, items):
 	"""
 	Writes out the current todo list
 	"""
-	out = open(DATA, "w")
+	out = open(dataFile, "w")
 	out.write( "\n".join(items) )
 	out.close()
 
-def removeLock():
+def removeLock(lockFile):
 	"""
 	Removes the lock file
 	"""
-	os.remove(LOCK)
+	os.remove(lockFile)
 
-def createLock():
+def createLock(lockFile):
 	"""
 	Creates the lock file
 	"""
-	handler = open(LOCK, "w")
+	handler = open(lockFile, "w")
 	handler.close()
 
-#commands
-EXIT = r"exit"
-ADD = r"add (.+)"
-DEL = r"del|rm ([0-9 ]+)"
-NUM = r"([0-9]+)"
-SAVE = r"save"
+def getFilePaths(longTerm):
+	"""
+	Returns the paths for the data and lock files
+	"""
+	if longTerm:
+		data = join(DATA_DIR, "should-do.txt")
+		lock = join(DATA_DIR, "should-do.lck")
+	else:
+		data = join(DATA_DIR, "todo.txt")
+		lock = join(DATA_DIR, "todo.lck")
 
-#check for lock file
-if exists(LOCK):
-	print("Todo already running")
-	sys.exit(1)
+	return data, lock
 
-#create the lock
-createLock()
+def main(longTerm, clearLock):
+	"""
+	Runs the interactive todo program
+	"""
+	#commands
+	EXIT = r"exit"
+	ADD = r"add (.+)"
+	DEL = r"del|rm ([0-9 ]+)"
+	NUM = r"([0-9]+)"
+	SAVE = r"save"
 
-#init the program
-done = False
-items = loadFile()
-showList(items)
-
-#register handler for crtl+c
-signal.signal(signal.SIGINT, signalHandler)
-
-#contine reading commands
-while not done:
-
-	#get the input
-	cmd = raw_input()
-
-	#match it to a command
-	if re.match(EXIT, cmd):
-		saveFile(items)
-		removeLock()
+	data, lock = getFilePaths(longTerm)
+	
+	def signalHandler(signal, frame):
+		"""
+		Saves the file when ctrl c is pressed
+		"""
+		clear()
+		saveFile(data, frame.f_locals["items"])
+		removeLock(lock)
 		sys.exit(0)
 
-	elif re.match(ADD, cmd):
-		items.append(re.match(ADD, cmd).groups()[0].strip())
-		showList(items)
+	#check for lock file
+	if exists(lock):
 
-	elif re.match(SAVE, cmd):
-		saveFile(items)
-		showList(items)
+		if clearLock:
+			removeLock(lock)
+		else:
+			print("Todo already running")
+			sys.exit(1)
 
-	elif re.match(DEL, cmd):
-		
-		#get all the items to remove and do it in reverse order to make sure
-		#the correct indexes are removed
-		for index in sorted(map(int,re.findall(NUM, cmd)), reverse=True):
-			del items[index]
-		
-		showList(items)
+	#create the lock
+	createLock(lock)
 
-	#print error message
-	else:
-		showList(items)
-		print("Please enter a command {}, {} {}, or {}".format(ADD, DEL, SAVE, EXIT))
+	#init the program
+	done = False
+	items = loadFile(data)
+	showList(items)
 
+	#register handler for crtl+c
+	signal.signal(signal.SIGINT, signalHandler)
+
+	#contine reading commands
+	while not done:
+
+		#get the input
+		cmd = raw_input()
+
+		#match it to a command
+		if re.match(EXIT, cmd):
+			saveFile(data, items)
+			removeLock(lock)
+			sys.exit(0)
+
+		elif re.match(ADD, cmd):
+			items.append(re.match(ADD, cmd).groups()[0].strip())
+			showList(items)
+
+		elif re.match(SAVE, cmd):
+			saveFile(data, items)
+			showList(items)
+
+		elif re.match(DEL, cmd):
+			
+			#get all the items to remove and do it in reverse order to make sure
+			#the correct indexes are removed
+			for index in sorted(map(int,re.findall(NUM, cmd)), reverse=True):
+				del items[index]
+			
+			showList(items)
+
+		#print error message
+		else:
+			showList(items)
+			print("Please enter a command {}, {} {}, or {}".format(ADD, DEL, SAVE, EXIT))
+
+if __name__ == "__main__":
+	
+	parser = ArgumentParser()
+	parser.add_argument("-s", action="store_true", help="Edit/View the 'Should' do list")
+	parser.add_argument("-clear", action="store_true", help="Clears the lock file")
+	args = parser.parse_args()
+	
+	main(args.s,args.clear)
