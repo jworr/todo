@@ -52,11 +52,11 @@ def saveFile(dataFile, items):
 	out.write( "\n".join(items) )
 	out.close()
 
-def removeLock(lockFile):
+def removeLock(lockFile, ignoreLock):
 	"""
 	Removes the lock file
 	"""
-	if exists(lockFile):
+	if exists(lockFile) and not ignoreLock:
 		os.remove(lockFile)
 
 def createLock(lockFile, ignoreLock):
@@ -99,14 +99,14 @@ def main(longTerm, clearLock, ignoreLock):
 		"""
 		clear()
 		saveFile(data, frame.f_locals["items"])
-		removeLock(lock)
+		removeLock(lock, ignoreLock)
 		sys.exit(0)
 
 	#check for lock file
 	if exists(lock):
 
 		if clearLock:
-			removeLock(lock)
+			removeLock(lock, ignoreLock)
 		elif not ignoreLock:
 			print("Todo already running")
 			sys.exit(1)
@@ -131,7 +131,7 @@ def main(longTerm, clearLock, ignoreLock):
 		#match it to a command
 		if re.match(EXIT, cmd):
 			saveFile(data, items)
-			removeLock(lock)
+			removeLock(lock, ignoreLock)
 			sys.exit(0)
 
 		elif re.match(ADD, cmd):
